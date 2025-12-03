@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "npm --prefix frontend run dev",
     "dev:backend": "npm --prefix backend run dev",
+    "dev:all": "concurrently \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\"",
     "start:backend": "npm --prefix backend run start",
     "start:frontend": "npm --prefix frontend run dev",
     "start:all": "concurrently \"npm --prefix backend run start\" \"npm --prefix frontend run dev\"",

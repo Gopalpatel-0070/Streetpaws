@@ -229,7 +229,7 @@ function App() {
   
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('streetpaws_token'));
+  const [token, setToken] = useState<String | null>(() => localStorage.getItem('streetpaws_token'));
   
   // Filter/Sort States
   const [selectedType, setSelectedType] = useState<FilterType>("All");
