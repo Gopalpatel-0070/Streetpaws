@@ -1,0 +1,249 @@
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import { GoogleGenAI } from '@google/genai';
+
+dotenv.config();
+
+const PORT = process.env.PORT || 4000;
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/streetpaws_db';
+const JWT_SECRET = process.env.JWT_SECRET || 'please_change_me';
+
+// Setup Mongoose schemas & connection
+const { Schema } = mongoose;
+
+const userSchema = new Schema({
+  name: { type: String },
+  email: { type: String, required: true, unique: true },
+  password_hash: { type: String, required: true },
+  profileImageData: { type: String, default: null },
+  profileImageType: { type: String, default: null },
+  profileImageUrl: { type: String, default: null },
+}, { timestamps: { createdAt: 'createdAt' } });
+
+const petSchema = new Schema({
+  author: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+  name: String,
+  type: String,
+  age: String,
+  location: String,
+  distance: Number,
+  description: String,
+  imageUrl: String,
+  imageData: { type: String, default: null },
+  imageType: { type: String, default: null },
+  traits: { type: String, default: '' },
+  comments: [{ id: String, text: String, author: String, createdAt: Date }],
+  contactNumber: String,
+  postedAt: { type: Date, default: Date.now },
+  urgency: { type: String, default: 'Medium' },
+  status: { type: String, default: 'Available' },
+  donationUrl: String,
+  cheers: { type: Number, default: 0 },
+}, { toJSON: { virtuals: true }, toObject: { virtuals: true } });
+
+const User = mongoose.model('User', userSchema);
+const Pet = mongoose.model('Pet', petSchema);
+
+async function initDb() {
+  try {
+    mongoose.connection.on('connected', () => console.log('Mongoose connected to', MONGO_URI));
+    mongoose.connection.on('error', (err) => console.error('Mongoose connection error:', err && err.message ? err.message : err));
+    mongoose.connection.on('disconnected', () => console.warn('Mongoose disconnected'));
+
+    await mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 5000 });
+    console.log('Connected to MongoDB');
+  } catch (err) {
+    console.error('Failed to connect to MongoDB at', MONGO_URI);
+    console.error(err && err.message ? err.message : err);
+    throw err;
+  }
+}
+
+const app = express();
+app.use(cors({ origin: 'http://localhost:5173' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+function signToken(user) {
+  return jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+}
+
+async function authenticate(req, res, next) {
+  const auth = req.headers.authorization || '';
+  const token = auth.replace(/^Bearer\s+/, '');
+  if (!token) return res.status(401).json({ error: 'Missing token' });
+  try {
+    const data = jwt.verify(token, JWT_SECRET);
+    req.user = data;
+    next();
+  } catch (e) {
+    res.status(401).json({ error: 'Invalid token' });
+  }
+}
+
+app.post('/api/signup', async (req, res) => {
+  const { name, email, password } = req.body;
+  const { profileImageData, profileImageType, profileImageUrl } = req.body;
+  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+  try {
+    const password_hash = await bcrypt.hash(password, 10);
+    const existing = await User.findOne({ email }).lean();
+    if (existing) return res.status(400).json({ error: 'Email already exists' });
+    const udoc = await User.create({ name: name || '', email, password_hash, profileImageData: profileImageData || null, profileImageType: profileImageType || null, profileImageUrl: profileImageUrl || null });
+    const user = { id: udoc._id.toString(), name: udoc.name, email: udoc.email, joinedAt: udoc.createdAt };
+    const token = signToken(user);
+    res.json({ user: { ...user, profileImageData: udoc.profileImageData, profileImageType: udoc.profileImageType, profileImageUrl: udoc.profileImageUrl }, token });
+  } catch (err) {
+    console.error(err);
+    res.status(400).json({ error: 'Could not create user (maybe email already exists)' });
+  }
+});
+
+app.post('/api/login', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+  try {
+    const user = await User.findOne({ email }).lean();
+    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+    const ok = await bcrypt.compare(password, user.password_hash);
+    if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
+    const token = signToken({ id: user._id.toString(), email: user.email });
+    res.json({ user: { id: user._id.toString(), name: user.name, email: user.email, joinedAt: user.createdAt, profileImageData: user.profileImageData || null, profileImageType: user.profileImageType || null, profileImageUrl: user.profileImageUrl || null }, token });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+app.get('/api/pets', async (req, res) => {
+  try {
+    const pets = await Pet.find({}).sort({ postedAt: -1 }).lean();
+    const authorIds = Array.from(new Set(pets.map(p => p.author ? p.author.toString() : null).filter(Boolean)));
+    const authors = await User.find({ _id: { $in: authorIds } }).lean();
+    const authorMap = {};
+    authors.forEach(a => { authorMap[a._id.toString()] = { id: a._id.toString(), name: a.name, email: a.email, profileImageData: a.profileImageData || null, profileImageType: a.profileImageType || null, profileImageUrl: a.profileImageUrl || null }; });
+    const out = pets.map(p => {
+      const pid = p._id.toString();
+      const authorId = p.author ? p.author.toString() : null;
+      const author = authorId ? authorMap[authorId] || null : null;
+      return { ...p, id: pid, authorId, author };
+    });
+    res.json({ pets: out });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not fetch pets' });
+  }
+});
+
+app.post('/api/pets', authenticate, async (req, res) => {
+  const p = req.body;
+  try {
+    const newPet = await Pet.create({
+      author: req.user.id || null,
+      name: p.name,
+      type: p.type,
+      age: p.age,
+      location: p.location,
+      distance: p.distance || 0,
+      description: p.description,
+      imageUrl: p.imageUrl || null,
+      imageData: p.imageData || null,
+      imageType: p.imageType || null,
+      traits: p.traits || '',
+      comments: p.comments || [],
+      contactNumber: p.contactNumber,
+      postedAt: p.postedAt ? new Date(p.postedAt) : new Date(),
+      urgency: p.urgency || 'Medium',
+      status: p.status || 'Available',
+      donationUrl: p.donationUrl || null,
+      cheers: p.cheers || 0
+    });
+    const petObj = newPet.toObject();
+    const author = petObj.author ? await User.findById(petObj.author).lean() : null;
+    const out = { ...petObj, id: petObj._id.toString(), authorId: petObj.author ? petObj.author.toString() : null, author: author ? { id: author._id.toString(), name: author.name, profileImageData: author.profileImageData || null, profileImageType: author.profileImageType || null, profileImageUrl: author.profileImageUrl || null } : null };
+    res.json({ pet: out });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not create pet' });
+  }
+});
+
+app.patch('/api/pets/:id', authenticate, async (req, res) => {
+  const petId = req.params.id;
+  const updates = req.body || {};
+  try {
+    const pet = await Pet.findById(petId).lean();
+    if (!pet) return res.status(404).json({ error: 'Pet not found' });
+    if (!pet.author || pet.author.toString() !== req.user.id) return res.status(403).json({ error: 'Not permitted' });
+    const set = {};
+    ['name','type','age','location','description','imageUrl','imageData','imageType','contactNumber','urgency','status','donationUrl','cheers','traits','comments'].forEach(k => {
+      if (typeof updates[k] !== 'undefined') set[k] = updates[k];
+    });
+    const updated = await Pet.findByIdAndUpdate(petId, set, { new: true }).lean();
+    const author = updated.author ? await User.findById(updated.author).lean() : null;
+    const out = { ...updated, id: updated._id.toString(), authorId: updated.author ? updated.author.toString() : null, author: author ? { id: author._id.toString(), name: author.name, profileImageData: author.profileImageData || null, profileImageType: author.profileImageType || null, profileImageUrl: author.profileImageUrl || null } : null };
+    res.json({ pet: out });
+  } catch (err) {
+    console.error('Failed updating pet', err);
+    res.status(500).json({ error: 'Could not update pet' });
+  }
+});
+
+app.post('/api/chat', async (req, res) => {
+  const { message } = req.body;
+  if (!message) return res.status(400).json({ error: 'Message required' });
+  try {
+    const gkey = process.env.API_KEY;
+    if (!gkey) return res.status(500).json({ error: 'Server missing API key (set API_KEY in .env)' });
+    const ai = new GoogleGenAI({ apiKey: gkey });
+    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: `You are a helpful veterinary assistant for street animals. Give concise, safe, and practical advice. User Question: ${message}` });
+    res.json({ reply: response?.text || '' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'AI service error' });
+  }
+});
+
+app.patch('/api/me', authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { name, email, password, profileImageData, profileImageType, profileImageUrl } = req.body;
+    const updates = {};
+    if (typeof name === 'string') updates.name = name;
+    if (typeof email === 'string') {
+      const existing = await User.findOne({ email }).lean();
+      if (existing && existing._id.toString() !== userId) return res.status(400).json({ error: 'Email already in use' });
+      updates.email = email;
+    }
+    if (typeof password === 'string' && password.length > 0) {
+      updates.password_hash = await bcrypt.hash(password, 10);
+    }
+    if (typeof profileImageData === 'string') updates.profileImageData = profileImageData;
+    if (typeof profileImageType === 'string') updates.profileImageType = profileImageType;
+    if (typeof profileImageUrl === 'string') updates.profileImageUrl = profileImageUrl;
+
+    const updated = await User.findByIdAndUpdate(userId, updates, { new: true }).lean();
+    if (!updated) return res.status(404).json({ error: 'User not found' });
+
+    res.json({ user: { id: updated._id.toString(), name: updated.name, email: updated.email, joinedAt: updated.createdAt, profileImageData: updated.profileImageData || null, profileImageType: updated.profileImageType || null, profileImageUrl: updated.profileImageUrl || null } });
+  } catch (err) {
+    console.error('Failed updating profile', err);
+    res.status(500).json({ error: 'Could not update profile' });
+  }
+});
+
+app.get('/health', (req, res) => res.json({ ok: true }));
+
+(async () => {
+  try {
+    await initDb();
+    app.listen(PORT, () => console.log(`Server listening on http://localhost:${PORT}`));
+  } catch (err) {
+    console.error('Failed to start server', err);
+    process.exit(1);
+  }
+})();
