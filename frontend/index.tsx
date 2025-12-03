@@ -1757,5 +1757,9 @@ function PetFormModal({
   );
 }
 
-const root = createRoot(document.getElementById("root")!);
+const rootElement = document.getElementById("root");
+if (!rootElement) {
+  throw new Error('Root element with id "root" not found');
+}
+const root = createRoot(rootElement);
 root.render(<App />);

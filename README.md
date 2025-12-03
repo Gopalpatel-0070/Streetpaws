@@ -3,8 +3,10 @@
 This workspace contains a small React + TypeScript frontend and a Node/Express backend which persists data to MongoDB.
 
 Quick overview:
-- Frontend: index.tsx (Vite + React)
-- Backend: server/index.js (Express + MongoDB / Mongoose + auth + AI chat proxy)
+- Frontend: `frontend/` (Vite + React)
+	- entry: `frontend/index.tsx`
+- Backend: `backend/` (Express + MongoDB / Mongoose + auth + AI chat proxy)
+	- entry: `backend/index.js`
  - Database: MongoDB (database = streetpaws_db by default)
 
 Important: this workspace contains a local `.env` (for convenience during development) with your Gemini API key. Do not commit a real API key to public repos. Keep `.env` in `.gitignore`.
@@ -21,7 +23,7 @@ Start the app
 npm install
 ```
 
-2. Start the backend server (Express) — this connects to MongoDB using MONGO_URI from `.env` and will create collections as needed:
+2. Start the backend server (Express) — this connects to MongoDB using `MONGO_URI` from `.env` and will create collections as needed. The backend entrypoint is `backend/index.js`:
 
 ```bash
 npm run server
@@ -48,13 +50,13 @@ curl -X POST http://localhost:4000/api/login -H "Content-Type: application/json"
 curl http://localhost:4000/api/pets
 ```
 
-3. Start the frontend dev server (Vite) in a second terminal:
+3. Start the frontend dev server (Vite) in a second terminal (it uses `frontend/vite.config.ts`):
 
 ```bash
-npm run dev
+npm run start:frontend
 ```
 
-4. Open http://localhost:5173 in your browser to view the app.
+4. Open http://localhost:5173 in your browser to view the app served from the `frontend/` folder.
 
 Notes about the Gemini API key
 - The backend reads the API key from `.env` (API_KEY). You provided a key already in `.env` for convenience.
@@ -64,6 +66,20 @@ If you prefer to run both at once (concurrently):
 
 ```bash
 npm run start:all
+```
+
+Workspace tips
+- Install dependencies for the whole workspace from the project root:
+
+```bash
+npm install
+```
+
+- You can also install per-app dependencies individually:
+
+```bash
+npm --prefix frontend install
+npm --prefix backend install
 ```
 
 If you get a database connection error on startup, ensure MongoDB is running and MONGO_URI is set correctly in your `.env` (default mongodb://127.0.0.1:27017/streetpaws_db).

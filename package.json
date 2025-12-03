@@ -4,30 +4,21 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "vite",
-    "server": "node server/index.js",
-    "start:all": "concurrently \"npm run server\" \"npm run dev\"",
-    "build": "vite build",
-    "preview": "vite preview --port 5174"
+    "dev": "npm --prefix frontend run dev",
+    "dev:backend": "npm --prefix backend run dev",
+    "start:backend": "npm --prefix backend run start",
+    "start:frontend": "npm --prefix frontend run dev",
+    "start:all": "concurrently \"npm --prefix backend run start\" \"npm --prefix frontend run dev\"",
+    "server": "npm run start:backend",
+    "build": "npm --prefix frontend run build",
+    "preview": "npm --prefix frontend run preview"
   },
-  "dependencies": {
-    "@google/genai": "^1.30.0",
-    "bcryptjs": "^2.4.3",
-    "cors": "^2.8.5",
-    "dotenv": "^16.1.4",
-    "express": "^4.18.2",
-    "jsonwebtoken": "^9.0.0",
-    "lucide-react": "^0.555.0",
-    "mongoose": "^7.8.7",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
-  },
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "dependencies": {},
   "devDependencies": {
-    "@types/react": "^18.0.37",
-    "@types/react-dom": "^18.0.11",
-    "@vitejs/plugin-react": "^5.0.0",
-    "concurrently": "^8.2.0",
-    "typescript": "^5.4.0",
-    "vite": "^5.0.0"
+    "concurrently": "^8.2.0"
   }
 }
