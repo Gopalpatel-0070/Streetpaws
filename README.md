@@ -72,3 +72,4 @@ Running MongoDB locally
 
 - To develop locally you can install MongoDB Community Server and run `mongod` (it typically listens on 27017). The default `.env` is set to use `mongodb://127.0.0.1:27017/streetpaws_db`.
 - Alternatively you can use MongoDB Atlas (cloud). Create a free cluster, obtain the connection string and set `MONGO_URI` in `.env`.
+"# Street-paws"  
