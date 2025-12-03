@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StreetPaws - Adopt a Street Friend</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Using local node_modules + Vite for dev builds. CDN importmap removed to avoid conflicts. -->
+    <style>
+      /* Custom scrollbar for horizontal lists */
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+    </style>
+  </head>
+  <body class="bg-stone-50">
+    <div id="root"></div>
+    <script type="module" src="index.tsx"></script>
+  </body>
+</html>

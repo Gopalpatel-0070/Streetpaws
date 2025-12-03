@@ -1,0 +1,12 @@
+{
+  "user": {
+    "id": "692f40c7abf99af3eb01a37d",
+    "name": "E2E Tester",
+    "email": "tester_e2e_1764704454494@example.com",
+    "joinedAt": "2025-12-02T19:40:55.066Z",
+    "profileImageData": null,
+    "profileImageType": null,
+    "profileImageUrl": null
+  },
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5MmY0MGM3YWJmOTlhZjNlYjAxYTM3ZCIsImVtYWlsIjoidGVzdGVyX2UyZV8xNzY0NzA0NDU0NDk0QGV4YW1wbGUuY29tIiwiaWF0IjoxNzY0NzA0NDU1LCJleHAiOjE3NjUzMDkyNTV9.s2Cpg97MiVTtMUuoAKc5lZA017bOSn5HUE7zEo1M254"
+}
