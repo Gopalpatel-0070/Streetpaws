@@ -10,12 +10,12 @@ export default defineConfig({
     // allow using relative `/api/*` paths in the frontend code.
     proxy: {
       '/api': {
-        target: 'http://localhost:4000',
+        target: 'https://streetpaws-backend-production.up.railway.app',
         changeOrigin: true,
         secure: false,
       },
       '/health': {
-        target: 'http://localhost:4000',
+        target: 'https://streetpaws-backend-production.up.railway.app',
         changeOrigin: true,
         secure: false,
       }

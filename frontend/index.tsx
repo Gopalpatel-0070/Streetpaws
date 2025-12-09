@@ -255,7 +255,7 @@ function App() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch('http://localhost:4000/api/pets');
+        const res = await fetch('https://streetpaws-backend-production.up.railway.app/api/pets');
         if (res.ok) {
           const json = await res.json();
           if (json?.pets) setPets(json.pets.map((p: any) => normalizePet(p)));
@@ -307,7 +307,7 @@ function App() {
   const handleUpdateProfile = async (updates: { name?: string; email?: string; password?: string }) => {
     if (!token) { addToast('Not logged in; profile updates require login.', 'info'); return null; }
     try {
-      const res = await fetch('http://localhost:4000/api/me', { method: 'PATCH', headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(updates) });
+      const res = await fetch('https://streetpaws-backend-production.up.railway.app/api/me', { method: 'PATCH', headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(updates) });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         addToast(err?.error || 'Failed to update profile', 'error');
@@ -431,7 +431,7 @@ function App() {
       if (editingPet) {
         // update existing
         if (token) {
-          const res = await fetch(`http://localhost:4000/api/pets/${editingPet.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(petData) });
+          const res = await fetch(`https://streetpaws-backend-production.up.railway.app/api/pets/${editingPet.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(petData) });
           if (res.ok) {
             const json = await res.json();
             setPets(prev => prev.map(p => p.id === json.pet.id ? normalizePet(json.pet) : p));
@@ -449,7 +449,7 @@ function App() {
         try {
           const headers: any = { 'content-type': 'application/json' };
           if (token) headers.Authorization = `Bearer ${token}`;
-          const res = await fetch('http://localhost:4000/api/pets', { method: 'POST', headers, body: JSON.stringify(petData) });
+          const res = await fetch('https://streetpaws-backend-production.up.railway.app/api/pets', { method: 'POST', headers, body: JSON.stringify(petData) });
           if (res.ok) {
             const json = await res.json();
             setPets(prev => [normalizePet(json.pet), ...prev]);
@@ -1256,7 +1256,7 @@ function AIChatBot({ onClose, darkMode }: { onClose: () => void, darkMode: boole
 
     try {
       // call backend chat endpoint which uses server-side API key
-      const res = await fetch('http://localhost:4000/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: userMsg }) });
+      const res = await fetch('https://streetpaws-backend-production.up.railway.app/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: userMsg }) });
       const json = await res.json();
       setMessages(prev => [...prev, { role: 'model', text: json.reply || "I'm sorry, I couldn't process that." }]);
     } catch (e) {
@@ -1441,7 +1441,7 @@ function PetFormModal({
     setLoadingBio(true);
     try {
       const prompt = `Please write a short (1-2 sentences) heartwarming adoption bio for a stray ${formData.type} named ${formData.name}. Traits: ${formData.traits}. Keep it concise and friendly.`;
-      const res = await fetch('http://localhost:4000/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: prompt }) });
+      const res = await fetch('https://streetpaws-backend-production.up.railway.app/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: prompt }) });
       const json = await res.json();
       if (json?.reply) setFormData((prev) => ({ ...prev, description: json.reply.trim() }));
     } catch (e) { console.error(e); } finally { setLoadingBio(false); }
