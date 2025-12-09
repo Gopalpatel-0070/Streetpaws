@@ -9,7 +9,8 @@ import { GoogleGenAI } from '@google/genai';
 dotenv.config();
 
 const PORT = process.env.PORT || 4000;
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/streetpaws_db';
+// Prefer production MongoDB connection string from env var; fallback to local for development
+const MONGO_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/streetpaws_db';
 const JWT_SECRET = process.env.JWT_SECRET || 'please_change_me';
 
 // Setup Mongoose schemas & connection
@@ -52,19 +53,20 @@ const User = mongoose.model('User', userSchema);
 const Pet = mongoose.model('Pet', petSchema);
 
 async function initDb() {
-  // Add a short server selection timeout so failed connections error quickly
-  try {
-    mongoose.connection.on('connected', () => console.log('Mongoose connected to', MONGO_URI));
-    mongoose.connection.on('error', (err) => console.error('Mongoose connection error:', err && err.message ? err.message : err));
-    mongoose.connection.on('disconnected', () => console.warn('Mongoose disconnected'));
+  // Register connection event handlers
+  mongoose.connection.on('connected', () => console.log('Mongoose connected to', MONGO_URI));
+  mongoose.connection.on('error', (err) => console.error('Mongoose connection error:', err && err.message ? err.message : err));
+  mongoose.connection.on('disconnected', () => console.warn('Mongoose disconnected'));
 
-    await mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 5000 });
-    console.log('Connected to MongoDB');
+  try {
+    console.log('Attempting MongoDB connection to', MONGO_URI);
+    await mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true, serverSelectionTimeoutMS: 5000 });
+    console.log('MongoDB connected successfully');
+    return true;
   } catch (err) {
-    // Provide a helpful message that will show up right away
-    console.error('Failed to connect to MongoDB at', MONGO_URI);
-    console.error(err && err.message ? err.message : err);
-    throw err;
+    console.error('Database connection failed:', err && err.message ? err.message : err);
+    // Do not throw — allow the server to start and operate in degraded mode
+    return false;
   }
 }
 
