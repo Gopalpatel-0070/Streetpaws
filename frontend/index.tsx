@@ -227,7 +227,6 @@ function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPet, setEditingPet] = useState<Pet | null>(null);
   
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [token, setToken] = useState<String | null>(() => localStorage.getItem('streetpaws_token'));
   
@@ -291,7 +290,7 @@ function App() {
     setCurrentUser(savedUser);
     if (user.token) { setToken(user.token); localStorage.setItem('streetpaws_token', user.token); }
     localStorage.setItem("streetpaws_user", JSON.stringify(savedUser));
-    setIsAuthOpen(false);
+    // auth UI removed; no-op
     addToast(`Welcome back, ${user.name || user.email}!`, "success");
   };
 
@@ -306,7 +305,7 @@ function App() {
 
   // Update the logged-in user's profile (name, email, optionally password)
   const handleUpdateProfile = async (updates: { name?: string; email?: string; password?: string }) => {
-    if (!token) { setIsAuthOpen(true); return; }
+    if (!token) { addToast('Not logged in; profile updates require login.', 'info'); return null; }
     try {
       const res = await fetch('http://localhost:4000/api/me', { method: 'PATCH', headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(updates) });
       if (!res.ok) {
@@ -359,14 +358,11 @@ function App() {
   };
 
   const handleAddComment = (petId: string, text: string) => {
-    if (!currentUser) {
-       setIsAuthOpen(true);
-       return;
-    }
+    const authorName = currentUser ? currentUser.name : 'Guest';
     const newComment: Comment = {
       id: Math.random().toString(36),
       text,
-      author: currentUser.name,
+      author: authorName,
       createdAt: new Date(),
     };
     const existingComments = pets.find(p => p.id === petId)?.comments || [];
@@ -413,13 +409,9 @@ function App() {
 
   // Modal Handlers
   const openListStrayModal = () => {
-    if (!currentUser) {
-      setIsAuthOpen(true);
-      addToast("Please login to list a stray.", "info");
-    } else {
-      setEditingPet(null);
-      setIsModalOpen(true);
-    }
+    // allow listing without login (guest users)
+    setEditingPet(null);
+    setIsModalOpen(true);
   };
 
   const openEditPetModal = (pet: Pet) => {
@@ -453,20 +445,24 @@ function App() {
           addToast('Pet details updated!', 'success');
         }
       } else {
-        // create new pet
-        if (token) {
-          const res = await fetch('http://localhost:4000/api/pets', { method: 'POST', headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(petData) });
+        // create new pet: always POST to server; include Authorization header when present
+        try {
+          const headers: any = { 'content-type': 'application/json' };
+          if (token) headers.Authorization = `Bearer ${token}`;
+          const res = await fetch('http://localhost:4000/api/pets', { method: 'POST', headers, body: JSON.stringify(petData) });
           if (res.ok) {
             const json = await res.json();
             setPets(prev => [normalizePet(json.pet), ...prev]);
             addToast('Pet listed successfully!', 'success');
           } else {
             const err = await res.json().catch(() => ({}));
-            addToast(err?.error || 'Failed to create pet', 'error');
+            addToast(err?.error || 'Failed to create pet; saved locally', 'error');
+            setPets(prev => [petData, ...prev]);
           }
-        } else {
+        } catch (e) {
+          console.error('Create pet failed', e);
+          addToast('Failed to reach server; saved locally', 'error');
           setPets(prev => [petData, ...prev]);
-          addToast('Pet listed successfully!', 'success');
         }
       }
     } catch (err) {
@@ -540,13 +536,10 @@ function App() {
               </div>
             ) : (
               <button
-                onClick={() => {
-                  setIsAuthOpen(true);
-                  addToast('Opening login / sign-up…', 'info');
-                }}
+                onClick={() => { addToast('No login required — you can view and list pets as a guest.', 'info'); }}
                 className={`text-sm font-bold px-4 py-2 rounded-full transition-colors ${darkMode ? "text-stone-300 hover:text-white" : "text-stone-600 hover:text-stone-900"}`}
               >
-                Login
+                Guest
               </button>
             )}
 
@@ -732,13 +725,7 @@ function App() {
         />
       )}
 
-      {isAuthOpen && (
-        <AuthModal 
-          onClose={() => setIsAuthOpen(false)} 
-          onLogin={handleLogin}
-          darkMode={darkMode}
-        />
-      )}
+      {/* Auth removed: guest users can view and list pets without signing in */}
       {/* Footer */}
       <footer className={`mt-12 border-t pt-6 pb-8 ${darkMode ? "border-stone-800 text-stone-400" : "border-stone-200 text-stone-600"}`}>
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -1060,16 +1047,11 @@ const PetCard: React.FC<{
           );
         })()}
         
-        {/* Badges */}
+        {/* Badges: urgency only (distance removed to avoid overlaying photos) */}
         <div className="absolute top-3 left-3 flex flex-col gap-1 z-10">
           <span className={`text-xs font-bold px-2 py-1 rounded shadow-sm ${urgencyColor}`}>
             {pet.urgency} Priority
           </span>
-          {pet.distance < 2 && (
-             <span className="bg-blue-500 text-white text-xs font-bold px-2 py-1 rounded shadow-sm flex items-center gap-1">
-               <MapPin size={10} /> Nearby ({pet.distance}km)
-             </span>
-          )}
         </div>
 
         {pet.status === "Adopted" && (
@@ -1247,146 +1229,7 @@ const PetCard: React.FC<{
   );
 }
 
-// --- Auth Modal ---
-function AuthModal({ onClose, onLogin, darkMode }: { onClose: () => void, onLogin: (user: any) => void, darkMode: boolean }) {
-  useEffect(() => {
-    console.debug('AuthModal mounted');
-    return () => { console.debug('AuthModal unmounted'); };
-  }, []);
-  const [isLogin, setIsLogin] = useState(true);
-  const [formData, setFormData] = useState({ name: "", email: "", password: "" });
-  const [error, setError] = useState("");
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    // Call server API for auth
-    try {
-      if (isLogin) {
-        const res = await fetch('http://localhost:4000/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: formData.email, password: formData.password }) });
-        if (!res.ok) throw new Error('Invalid login');
-        const json = await res.json();
-            // include avatar if server returned profile image fields
-            const avatar = json.user.profileImageData && json.user.profileImageType ? `data:${json.user.profileImageType};base64,${json.user.profileImageData}` : (json.user.profileImageUrl || null);
-            onLogin({ id: json.user.id, name: json.user.name, email: json.user.email, joinedAt: new Date(), token: json.token, profileImageData: json.user.profileImageData, profileImageType: json.user.profileImageType, profileImageUrl: json.user.profileImageUrl, avatar });
-      } else {
-        const res = await fetch('http://localhost:4000/api/signup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: formData.name, email: formData.email, password: formData.password }) });
-        if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j?.error || 'Signup failed'); }
-        const json = await res.json();
-            const avatar = json.user.profileImageData && json.user.profileImageType ? `data:${json.user.profileImageType};base64,${json.user.profileImageData}` : (json.user.profileImageUrl || null);
-            onLogin({ id: json.user.id, name: json.user.name, email: json.user.email, joinedAt: new Date(), token: json.token, profileImageData: json.user.profileImageData, profileImageType: json.user.profileImageType, profileImageUrl: json.user.profileImageUrl, avatar });
-      }
-    } catch (err: any) {
-      console.error('Auth error', err);
-      setError(err.message || 'Authentication failed');
-    }
-  };
-
-  const inputClass = `w-full p-3 rounded-xl outline-none focus:ring-2 focus:ring-amber-500/50 transition-all border ${darkMode ? "bg-stone-800 border-stone-700 text-white placeholder-stone-500" : "bg-stone-50 border-stone-200 text-stone-800 placeholder-stone-400"}`;
-
-  return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
-       <div className={`rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 ${darkMode ? "bg-stone-900" : "bg-white"}`}>
-         
-         {/* Modal Header */}
-         <div className="p-6 text-center border-b border-stone-100 dark:border-stone-800 relative">
-           <button onClick={onClose} className="absolute right-4 top-4 text-stone-400 hover:text-stone-600">
-             <X size={20} />
-           </button>
-           <h2 className={`text-2xl font-bold mb-1 ${darkMode ? "text-white" : "text-stone-800"}`}>
-             {isLogin ? "Welcome Back" : "Join the Pack"}
-           </h2>
-           <p className="text-sm text-stone-500">
-             {isLogin ? "Login to continue helping street friends." : "Create an account to start your journey."}
-           </p>
-         </div>
-
-         {/* Form */}
-         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-           {!isLogin && (
-             <div className="space-y-1">
-               <label className="text-xs font-bold text-stone-500 uppercase ml-1">Full Name</label>
-               <div className="relative">
-                 <User className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
-                 <input 
-                   type="text" 
-                   className={`${inputClass} pl-10`} 
-                   placeholder="John Doe"
-                   value={formData.name}
-                   onChange={e => setFormData({...formData, name: e.target.value})}
-                 />
-               </div>
-             </div>
-           )}
-
-           <div className="space-y-1">
-             <label className="text-xs font-bold text-stone-500 uppercase ml-1">Email Address</label>
-             <div className="relative">
-               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
-               <input 
-                 type="email" 
-                 className={`${inputClass} pl-10`} 
-                 placeholder="demo@streetpaws.com"
-                 value={formData.email}
-                 onChange={e => setFormData({...formData, email: e.target.value})}
-               />
-             </div>
-           </div>
-
-           <div className="space-y-1">
-             <label className="text-xs font-bold text-stone-500 uppercase ml-1">Password</label>
-             <div className="relative">
-               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
-               <input 
-                 type="password" 
-                 className={`${inputClass} pl-10`} 
-                 placeholder="••••••••"
-                 value={formData.password}
-                 onChange={e => setFormData({...formData, password: e.target.value})}
-               />
-             </div>
-           </div>
-
-           {error && <p className="text-red-500 text-sm text-center font-medium">{error}</p>}
-
-           <button 
-             type="submit" 
-             className="w-full bg-amber-600 text-white py-3 rounded-xl font-bold text-lg hover:bg-amber-700 shadow-lg hover:shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2"
-           >
-             {isLogin ? "Login" : "Create Account"}
-             <ChevronRight size={20} />
-           </button>
-
-           {isLogin && (
-             <button
-                type="button"
-                onClick={() => {
-                   setFormData({ email: "demo@streetpaws.com", password: "password", name: "" })
-                }}
-                className="w-full text-xs text-stone-500 hover:text-amber-600 underline"
-             >
-                Use Demo Credentials
-             </button>
-           )}
-         </form>
-
-         {/* Footer / Toggle */}
-         <div className={`p-4 text-center text-sm border-t ${darkMode ? "border-stone-800 bg-stone-900" : "border-stone-100 bg-stone-50"}`}>
-            <p className={darkMode ? "text-stone-400" : "text-stone-600"}>
-              {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
-              <button 
-                onClick={() => setIsLogin(!isLogin)} 
-                className="font-bold text-amber-600 hover:text-amber-700 hover:underline"
-              >
-                {isLogin ? "Sign Up" : "Login"}
-              </button>
-            </p>
-         </div>
-
-       </div>
-    </div>
-  );
-}
+// Auth modal removed — app now allows guest viewing and listing of pets
 
 // --- AI Chat Bot Component ---
 

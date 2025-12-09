@@ -77,9 +77,6 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 function signToken(user) {
-  return jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
-}
-
 async function authenticate(req, res, next) {
   const auth = req.headers.authorization || '';
   const token = auth.replace(/^Bearer\s+/, '');
@@ -94,40 +91,9 @@ async function authenticate(req, res, next) {
 }
 
 app.post('/api/signup', async (req, res) => {
-  const { name, email, password } = req.body;
-  const { profileImageData, profileImageType, profileImageUrl } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
-  try {
-    const password_hash = await bcrypt.hash(password, 10);
-    // create user in MongoDB
-    const existing = await User.findOne({ email }).lean();
-    if (existing) return res.status(400).json({ error: 'Email already exists' });
-    const udoc = await User.create({ name: name || '', email, password_hash, profileImageData: profileImageData || null, profileImageType: profileImageType || null, profileImageUrl: profileImageUrl || null });
-    const user = { id: udoc._id.toString(), name: udoc.name, email: udoc.email, joinedAt: udoc.createdAt };
-    const token = signToken(user);
-    // include avatar fields for client convenience
-    res.json({ user: { ...user, profileImageData: udoc.profileImageData, profileImageType: udoc.profileImageType, profileImageUrl: udoc.profileImageUrl }, token });
-  } catch (err) {
-    console.error(err);
-    res.status(400).json({ error: 'Could not create user (maybe email already exists)' });
-  }
-});
-
 app.post('/api/login', async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
-  try {
-    const user = await User.findOne({ email }).lean();
-    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
-    const ok = await bcrypt.compare(password, user.password_hash);
-    if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
-    const token = signToken({ id: user._id.toString(), email: user.email });
-    res.json({ user: { id: user._id.toString(), name: user.name, email: user.email, joinedAt: user.createdAt, profileImageData: user.profileImageData || null, profileImageType: user.profileImageType || null, profileImageUrl: user.profileImageUrl || null }, token });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Internal error' });
-  }
-});
+// Authentication endpoints removed: app no longer exposes signup/login routes.
+// Existing protected routes still respect Authorization header when present.
 
 app.get('/api/pets', async (req, res) => {
   try {
@@ -161,8 +127,20 @@ app.post('/api/pets', authenticate, async (req, res) => {
     }
   }
   try {
+    let authorId = null;
+    const auth = req.headers.authorization || '';
+    const token = auth.replace(/^Bearer\s+/, '');
+    if (token) {
+      try {
+        const data = jwt.verify(token, JWT_SECRET);
+        authorId = data?.id || null;
+      } catch (e) {
+        authorId = null;
+      }
+    }
+
     const newPet = await Pet.create({
-      author: req.user.id || null,
+      author: authorId,
       name: p.name,
       type: p.type,
       age: p.age,
@@ -223,13 +201,17 @@ app.post('/api/chat', async (req, res) => {
 
   try {
     const gkey = process.env.API_KEY;
-    if (!gkey) return res.status(500).json({ error: 'Server missing API key (set API_KEY in .env)' });
+    if (!gkey) {
+      const fallback = `AI assistant temporarily unavailable. Here are some concise general tips for common street-animal questions:\n\n- Keep the animal warm, quiet, and hydrated. Offer clean water and a small amount of easy-to-digest food.\n- For wounds, gently clean with saline or clean water and cover with a clean cloth. Seek vet care for deep wounds.\n- If the animal is distressed or aggressive, do not force contact; call local animal rescue.\n- For suspected poisoning, try to identify the substance and call a poison control or vet immediately.\n\nIf you want more specific advice, provide details (injuries, behavior, species, location).`;
+      return res.json({ reply: fallback });
+    }
     const ai = new GoogleGenAI({ apiKey: gkey });
     const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: `You are a helpful veterinary assistant for street animals. Give concise, safe, and practical advice. User Question: ${message}` });
     res.json({ reply: response?.text || '' });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'AI service error' });
+    const fallbackErr = `I'm sorry — the AI assistant encountered an error. Here are general care tips: keep the animal warm, hydrated, and seek veterinary help for injuries or poisoning.`;
+    res.json({ reply: fallbackErr });
   }
 });
 
