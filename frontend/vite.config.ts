@@ -6,19 +6,18 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    // Proxy API requests to the backend during development to avoid CORS and
-    // allow using relative `/api/*` paths in the frontend code.
     proxy: {
       '/api': {
-        target: 'http://localhost:4000',
+        target: 'https://streetpaws-backend-production.up.railway.app',
         changeOrigin: true,
-        secure: false,
+        secure: true,
       },
       '/health': {
-        target: 'http://localhost:4000',
+        target: 'https://streetpaws-backend-production.up.railway.app',
         changeOrigin: true,
-        secure: false,
+        secure: true,
       }
     }
   }
 })
+
