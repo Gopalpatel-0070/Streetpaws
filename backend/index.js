@@ -8,7 +8,8 @@ import { GoogleGenAI } from '@google/genai';
 
 dotenv.config();
 
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT
+
 // Prefer production MongoDB connection string from env var; fallback to local for development
 const MONGO_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/streetpaws_db';
 const JWT_SECRET = process.env.JWT_SECRET || 'please_change_me';
@@ -51,6 +52,13 @@ const petSchema = new Schema({
 
 const User = mongoose.model('User', userSchema);
 const Pet = mongoose.model('Pet', petSchema);
+function signToken(user) {
+  return jwt.sign(
+    { id: user._id.toString(), email: user.email },
+    JWT_SECRET,
+    { expiresIn: '7d' }
+  );
+}
 
 async function initDb() {
   // Register connection event handlers
@@ -71,7 +79,14 @@ async function initDb() {
 }
 
 const app = express();
-app.use(cors({ origin: 'http://localhost:5173' }));
+// CORS allow frontend deployment domain
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'https://streetpawss.up.railway.app',
+  ],
+  credentials: true
+}));
 // allow larger payloads for base64 image uploads (e.g. a few MBs)
 // Allow larger payloads for base64 image uploads (increase from 10mb)
 app.use(express.json({ limit: '50mb' }));
@@ -90,7 +105,7 @@ async function authenticate(req, res, next) {
   } catch (e) {
     res.status(401).json({ error: 'Invalid token' });
   }
-}
+}}
 
 app.post('/api/signup', async (req, res) => {
 app.post('/api/login', async (req, res) => {
@@ -255,7 +270,8 @@ app.get('/health', (req, res) => res.json({ ok: true }));
 (async () => {
   try {
     await initDb();
-    app.listen(PORT, () => console.log(`Server listening on http://localhost:${PORT}`));
+    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
   } catch (err) {
     console.error('Failed to start server', err);
     process.exit(1);
